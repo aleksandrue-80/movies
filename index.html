@@ -36,7 +36,7 @@ button:disabled{opacity:.5}
 .actions{display:flex;gap:8px;margin-top:14px}
 .bar{display:flex;justify-content:space-between;align-items:center;margin:4px 0 10px}
 .bar h2{font:700 18px Georgia,serif;margin:0}
-.bar .btns{display:flex;gap:6px}
+.bar .btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .bar button{padding:7px 10px;font-size:14px;border-color:#3d5b59;color:var(--paper)}
 .stub{display:flex;background:var(--paper);color:var(--ink);border-radius:12px;margin-bottom:10px;position:relative;overflow:hidden}
 .stub .l{padding:12px 12px 12px 14px;flex:1;min-width:0;display:flex;gap:10px}
@@ -75,7 +75,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     <div class="actions"><button id="save" type="button">Сохранить</button><button class="sec" id="cancel" type="button" hidden>Отмена</button></div>
   </section>
 
-  <div class="bar"><h2 id="cnt"></h2><div class="btns"><button class="sec" id="exp" type="button">Excel</button><button class="sec" id="imp" type="button">Импорт</button></div></div>
+  <div class="bar"><h2 id="cnt"></h2><div class="btns"><button class="sec" id="exp" type="button">Excel</button><button class="sec" id="imp" type="button">Импорт</button><button class="sec cloud" id="gup" type="button" hidden>☁ На Диск</button><button class="sec cloud" id="gdown" type="button" hidden>☁ С Диска</button></div></div>
   <div id="list"></div>
   <input id="file" type="file" accept=".xlsx,.xls,.csv" hidden>
 </div>
@@ -88,6 +88,10 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <label for="kkey">Токен Кинопоиска (kinopoiskapiunofficial.tech)</label>
   <input id="kkey" placeholder="Вставьте токен" autocapitalize="off" autocomplete="off">
   <p class="note">Бесплатный токен выдаётся после регистрации на kinopoiskapiunofficial.tech. Ключи хранятся только на этом телефоне.</p>
+  <label for="gid">Google Client ID (для сохранения на Диск)</label>
+  <input id="gid" placeholder="xxxx.apps.googleusercontent.com" autocapitalize="off" autocomplete="off">
+  <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input id="gauto" type="checkbox" style="width:auto"> Обновлять файл на Диске после каждого изменения</label>
+  <p class="note">Файл «Мои фильмы.xlsx» создаётся в корне вашего Google Диска. Приложение видит только его, остальные файлы недоступны.</p>
   <div class="actions"><button id="ksave" type="button">Сохранить</button><button class="sec" id="kclose" type="button">Закрыть</button></div>
 </dialog>
 <div class="toast" id="toast"></div>
@@ -96,10 +100,10 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <script>
 (function(){
   var $=function(i){return document.getElementById(i)};
-  var KEY='movielog:films:v1', KK='movielog:tmdbkey', KP='movielog:kpkey';
+  var KEY='movielog:films:v1', KK='movielog:tmdbkey', KP='movielog:kpkey', CK='movielog:gclient', AK='movielog:gauto', FK='movielog:gfile';
   var films=[],rating=0,editId=null,poster='';
   try{films=JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){}
-  function persist(){try{localStorage.setItem(KEY,JSON.stringify(films))}catch(e){toast('Не удалось сохранить')}}
+  function persist(skip){try{localStorage.setItem(KEY,JSON.stringify(films))}catch(e){toast('Не удалось сохранить')}if(!skip)autoSync()}
   function toast(t){var el=$('toast');el.textContent=t;el.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(function(){el.style.display='none'},2600)}
   function today(){var t=new Date();return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0')}
   function fmt(d){var p=(d||'').split('-');return p.length===3?p[2]+'.'+p[1]+'.'+p[0]:(d||'')}
@@ -180,19 +184,38 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   };
 
   // settings
-  $('gear').onclick=function(){$('key').value=localStorage.getItem(KK)||'';$('kkey').value=localStorage.getItem(KP)||'';$('dlg').showModal()};
+  $('gear').onclick=function(){$('key').value=localStorage.getItem(KK)||'';$('kkey').value=localStorage.getItem(KP)||'';$('gid').value=localStorage.getItem(CK)||'';$('gauto').checked=localStorage.getItem(AK)==='1';$('dlg').showModal()};
   $('kclose').onclick=function(){$('dlg').close()};
-  $('ksave').onclick=function(){try{localStorage.setItem(KK,$('key').value.trim());localStorage.setItem(KP,$('kkey').value.trim())}catch(e){}$('dlg').close();toast('Ключи сохранены')};
+  $('ksave').onclick=function(){try{localStorage.setItem(KK,$('key').value.trim());localStorage.setItem(KP,$('kkey').value.trim());localStorage.setItem(CK,$('gid').value.trim());localStorage.setItem(AK,$('gauto').checked?'1':'0')}catch(e){}$('dlg').close();cloudUI();toast('Ключи сохранены')};
 
-  // Excel export / import
-  $('exp').onclick=async function(){
-    if(!films.length){toast('Список пуст');return}
-    if(!window.XLSX){toast('Библиотека Excel не загружена, нужен интернет');return}
+  // Excel build / import
+  var XT='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', DNAME='Мои фильмы.xlsx';
+  function makeXlsx(){
     var rows=films.map(function(f){return{'Название':f.title,'Дата просмотра':f.date,'Оценка (из 5)':f.rating||'','Комментарий':f.comment||''}});
     var ws=XLSX.utils.json_to_sheet(rows);ws['!cols']=[{wch:36},{wch:16},{wch:14},{wch:60}];
     var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Фильмы');
-    var buf=XLSX.write(wb,{bookType:'xlsx',type:'array'});
-    var file=new File([buf],'films.xlsx',{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    return XLSX.write(wb,{bookType:'xlsx',type:'array'});
+  }
+  function importBuffer(buf){
+    var wb=XLSX.read(buf,{type:'array',cellDates:true});
+    var rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+    var added=0;
+    rows.forEach(function(r){
+      var title=String(r['Название']||'').trim();if(!title)return;
+      var d=r['Дата просмотра'];
+      if(d instanceof Date)d=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      else{d=String(d||'');var m=d.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);if(m)d=m[3]+'-'+m[2]+'-'+m[1]}
+      var rt=parseInt(r['Оценка (из 5)'],10)||0;
+      if(films.some(function(x){return x.title===title&&x.date===d}))return;
+      films.push({id:'f'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),title:title,date:d,rating:Math.max(0,Math.min(5,rt)),comment:String(r['Комментарий']||''),poster:''});added++;
+    });
+    persist(true);render();
+    return added;
+  }
+  $('exp').onclick=async function(){
+    if(!films.length){toast('Список пуст');return}
+    if(!window.XLSX){toast('Библиотека Excel не загружена, нужен интернет');return}
+    var file=new File([makeXlsx()],'films.xlsx',{type:XT});
     try{
       if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'Мои фильмы'});return}
     }catch(e){if(e&&e.name==='AbortError')return}
@@ -202,23 +225,68 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   $('file').onchange=async function(){
     var f=this.files[0];this.value='';if(!f)return;
     if(!window.XLSX){toast('Библиотека Excel не загружена, нужен интернет');return}
-    try{
-      var wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:true});
-      var rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
-      var added=0;
-      rows.forEach(function(r){
-        var title=String(r['Название']||'').trim();if(!title)return;
-        var d=r['Дата просмотра'];
-        if(d instanceof Date)d=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-        else{d=String(d||'');var m=d.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);if(m)d=m[3]+'-'+m[2]+'-'+m[1]}
-        var rt=parseInt(r['Оценка (из 5)'],10)||0;
-        var dup=films.some(function(x){return x.title===title&&x.date===d});
-        if(dup)return;
-        films.push({id:'f'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),title:title,date:d,rating:Math.max(0,Math.min(5,rt)),comment:String(r['Комментарий']||''),poster:''});added++;
-      });
-      persist();render();toast('Добавлено записей: '+added);
-    }catch(e){toast('Не удалось прочитать файл')}
+    try{toast('Добавлено записей: '+importBuffer(await f.arrayBuffer()))}catch(e){toast('Не удалось прочитать файл')}
   };
+
+  // Google Drive (scope drive.file: only files created by this app)
+  var gtoken=null,gexp=0;
+  function gOn(){return !!localStorage.getItem(CK)}
+  function cloudUI(){
+    [].forEach.call(document.querySelectorAll('.cloud'),function(b){b.hidden=!gOn()});
+    if(gOn()&&!(window.google&&google.accounts)){var sc=document.createElement('script');sc.src='https://accounts.google.com/gsi/client';sc.async=true;document.head.appendChild(sc)}
+  }
+  function getToken(){
+    if(gtoken&&Date.now()<gexp)return Promise.resolve(gtoken);
+    return new Promise(function(res,rej){
+      if(!window.google||!google.accounts){rej(new Error('Google не загружен, нужен интернет'));return}
+      var tc=google.accounts.oauth2.initTokenClient({
+        client_id:localStorage.getItem(CK),scope:'https://www.googleapis.com/auth/drive.file',
+        callback:function(r){if(r.error){rej(new Error(r.error));return}gtoken=r.access_token;gexp=Date.now()+((r.expires_in||3600)-60)*1000;res(gtoken)},
+        error_callback:function(e){rej(new Error(e&&e.type||'popup'))}
+      });
+      tc.requestAccessToken({prompt:''});
+    });
+  }
+  function dfetch(u,o,t){o=o||{};o.headers=Object.assign({Authorization:'Bearer '+t},o.headers||{});return fetch(u,o)}
+  async function findFile(t){
+    var id=localStorage.getItem(FK);
+    if(id){var r=await dfetch('https://www.googleapis.com/drive/v3/files/'+id+'?fields=id,trashed',{},t);if(r.ok){var j=await r.json();if(!j.trashed)return id}}
+    var q=encodeURIComponent("name='"+DNAME+"' and trashed=false");
+    var r2=await dfetch('https://www.googleapis.com/drive/v3/files?q='+q+'&fields=files(id)&orderBy=modifiedTime%20desc',{},t);
+    if(!r2.ok)throw new Error('Диск: ошибка '+r2.status);
+    var f=(await r2.json()).files||[];
+    if(f.length){try{localStorage.setItem(FK,f[0].id)}catch(e){}return f[0].id}
+    return null;
+  }
+  async function pushDrive(){
+    var tp=getToken();                       // запрос токена сразу, пока действует касание
+    if(!window.XLSX)throw new Error('Библиотека Excel не загружена');
+    var t=await tp,buf=makeXlsx(),id=await findFile(t),r;
+    if(id){r=await dfetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{'Content-Type':XT},body:buf},t)}
+    else{
+      var meta=JSON.stringify({name:DNAME,mimeType:XT});
+      var body=new Blob(['--mlb\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+meta+'\r\n--mlb\r\nContent-Type: '+XT+'\r\n\r\n',buf,'\r\n--mlb--']);
+      r=await dfetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{method:'POST',headers:{'Content-Type':'multipart/related; boundary=mlb'},body:body},t);
+      if(r.ok){var j=await r.json();try{localStorage.setItem(FK,j.id)}catch(e){}}
+    }
+    if(!r.ok)throw new Error('Диск: ошибка '+r.status);
+  }
+  async function pullDrive(){
+    var tp=getToken();
+    if(!window.XLSX)throw new Error('Библиотека Excel не загружена');
+    var t=await tp,id=await findFile(t);
+    if(!id){toast('Файл на Диске не найден');return}
+    var r=await dfetch('https://www.googleapis.com/drive/v3/files/'+id+'?alt=media',{},t);
+    if(!r.ok)throw new Error('Диск: ошибка '+r.status);
+    toast('Добавлено записей: '+importBuffer(await r.arrayBuffer()));
+  }
+  function autoSync(){
+    if(!gOn()||localStorage.getItem(AK)!=='1')return;
+    pushDrive().then(function(){toast('Сохранено на Диск')}).catch(function(){toast('Не удалось сохранить на Диск. Нажмите «На Диск»')});
+  }
+  $('gup').onclick=function(){if(!films.length){toast('Список пуст');return}pushDrive().then(function(){toast('Сохранено на Диск')}).catch(function(e){toast(e.message||'Не удалось сохранить на Диск')})};
+  $('gdown').onclick=function(){pullDrive().catch(function(e){toast(e.message||'Не удалось загрузить с Диска')})};
+  cloudUI();
 
   render();paint();
   if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(function(){});

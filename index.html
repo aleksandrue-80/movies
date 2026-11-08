@@ -114,7 +114,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     films.forEach(function(f){
       var s=document.createElement('div');s.className='stub';
       var l=document.createElement('div');l.className='l';
-      if(f.poster){var im=document.createElement('img');im.className='poster';im.loading='lazy';im.alt='';im.src='https://image.tmdb.org/t/p/w92'+f.poster;l.appendChild(im)}
+      if(f.poster){var im=document.createElement('img');im.className='poster';im.loading='lazy';im.alt='';im.src=posterUrl(f.poster);l.appendChild(im)}
       var tx=document.createElement('div');tx.style.minWidth=0;
       var t=document.createElement('div');t.className='t';t.textContent=f.title;
       var d=document.createElement('div');d.className='d';d.textContent=fmt(f.date);
@@ -140,29 +140,35 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     persist();render();reset();toast('Сохранено');
   };
 
-  // TMDB search
+  // search: TMDB (movies, needs key) + TVMaze (series, no key)
+  function posterUrl(p){return !p?'':(/^https?:/.test(p)?p:'https://image.tmdb.org/t/p/w92'+p)}
+  function getJson(u){return fetch(u).then(function(r){if(!r.ok)throw new Error(r.status);return r.json()})}
   $('find').onclick=async function(){
     var q=$('q').value.trim();if(!q)return;
-    var key=localStorage.getItem(KK)||'';
-    var box=$('sugg');
-    if(!key){box.innerHTML='<div class="note">Для поиска добавьте ключ TMDB в настройках. Название можно ввести и вручную.</div>';return}
-    var b=$('find');b.disabled=true;b.textContent='…';
-    try{
-      var r=await fetch('https://api.themoviedb.org/3/search/movie?api_key='+encodeURIComponent(key)+'&language=ru-RU&query='+encodeURIComponent(q));
-      if(!r.ok)throw new Error(r.status);
-      var j=await r.json();box.innerHTML='';
-      (j.results||[]).slice(0,6).forEach(function(m){
-        var bt=document.createElement('button');bt.type='button';
-        var im=m.poster_path?document.createElement('img'):document.createElement('div');
-        if(m.poster_path){im.src='https://image.tmdb.org/t/p/w92'+m.poster_path;im.alt=''}else im.className='ph';
-        var tx=document.createElement('div');tx.textContent=m.title;
-        var sm=document.createElement('small');sm.textContent=' '+((m.release_date||'').slice(0,4));tx.appendChild(sm);
-        bt.appendChild(im);bt.appendChild(tx);
-        bt.onclick=function(){$('q').value=m.title+(m.release_date?' ('+m.release_date.slice(0,4)+')':'');poster=m.poster_path||'';box.innerHTML=''};
-        box.appendChild(bt);
-      });
-      if(!box.children.length)box.innerHTML='<div class="note">Ничего не найдено.</div>';
-    }catch(e){box.innerHTML='<div class="note">Не удалось выполнить поиск. Проверьте ключ и интернет.</div>'}
+    var key=localStorage.getItem(KK)||'',enc=encodeURIComponent(q);
+    var box=$('sugg'),b=$('find');b.disabled=true;b.textContent='…';
+    var tasks=[];
+    if(key)tasks.push(getJson('https://api.themoviedb.org/3/search/movie?api_key='+encodeURIComponent(key)+'&language=ru-RU&query='+enc).then(function(j){
+      return (j.results||[]).slice(0,5).map(function(m){return{title:m.title,year:(m.release_date||'').slice(0,4),poster:m.poster_path?'https://image.tmdb.org/t/p/w92'+m.poster_path:'',kind:'Фильм'}})}));
+    tasks.push(getJson('https://api.tvmaze.com/search/shows?q='+enc).then(function(a){
+      return a.slice(0,5).map(function(x){var s=x.show;return{title:s.name,year:(s.premiered||'').slice(0,4),poster:s.image&&s.image.medium?s.image.medium.replace('http:','https:'):'',kind:'Сериал'}})}));
+    var res=await Promise.allSettled(tasks),items=[],ok=false;
+    res.forEach(function(r){if(r.status==='fulfilled'){ok=true;items=items.concat(r.value)}});
+    box.innerHTML='';
+    items.forEach(function(m){
+      var bt=document.createElement('button');bt.type='button';
+      var im;if(m.poster){im=document.createElement('img');im.src=m.poster;im.alt=''}else{im=document.createElement('div');im.className='ph'}
+      var tx=document.createElement('div');tx.textContent=m.title;
+      var sm=document.createElement('small');sm.textContent=' '+(m.year?m.year+', ':'')+m.kind.toLowerCase();tx.appendChild(sm);
+      bt.appendChild(im);bt.appendChild(tx);
+      bt.onclick=function(){$('q').value=m.title+(m.year?' ('+m.year+')':'');poster=m.poster;box.innerHTML=''};
+      box.appendChild(bt);
+    });
+    var msg='';
+    if(!ok)msg='Не удалось выполнить поиск. Проверьте интернет и ключ TMDB.';
+    else if(!items.length)msg='Ничего не найдено.';
+    else if(!key)msg='Показаны только сериалы. Чтобы искать и фильмы, добавьте ключ TMDB в настройках.';
+    if(msg){var n=document.createElement('div');n.className='note';n.textContent=msg;box.appendChild(n)}
     b.disabled=false;b.textContent='Найти';
   };
 

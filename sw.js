@@ -1,4 +1,4 @@
-const CACHE = 'movielog-v1';
+const CACHE = 'movielog-v2';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png',
   'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'];
 self.addEventListener('install', e => {
@@ -11,7 +11,7 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
-  if (e.request.method !== 'GET' || u.hostname.endsWith('themoviedb.org')) return;
+  if (e.request.method !== 'GET' || u.hostname.endsWith('themoviedb.org') || u.hostname.endsWith('tvmaze.com')) return;
   e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request).then(r => {
     if (r.ok && (u.origin === location.origin || u.hostname === 'cdnjs.cloudflare.com')) {
       const copy = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copy));

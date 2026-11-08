@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#12302f">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<title>Мои фильмы</title>
+<style>
+:root{--bg:#12302f;--bg2:#0d2423;--paper:#f2e8cf;--ink:#1c2b2a;--mut:#6b6a5c;--red:#c8372d;--star:#e0a526;--line:#d8cca9}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--paper);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+.wrap{max-width:640px;margin:0 auto;padding:16px}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+h1{font:700 28px/1.1 Georgia,"Times New Roman",serif;margin:0}
+.gear{background:none;border:1px solid #3d5b59;color:var(--paper);border-radius:10px;padding:8px 12px;font:inherit}
+.form{background:var(--paper);color:var(--ink);border-radius:14px;padding:14px;margin-bottom:16px}
+label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}
+label:first-child{margin-top:0}
+input,textarea{width:100%;font:inherit;color:var(--ink);background:#fffaf0;border:1px solid var(--line);border-radius:10px;padding:10px}
+textarea{min-height:72px;resize:vertical}
+.row{display:flex;gap:8px}
+.row input{flex:1}
+button{font:inherit;border:0;border-radius:10px;padding:10px 14px;background:var(--red);color:#fff}
+button.sec{background:transparent;color:inherit;border:1px solid var(--line)}
+button:disabled{opacity:.5}
+.stars{display:flex;gap:2px}
+.stars button{background:none;border:0;padding:0 3px;font-size:34px;line-height:1;color:var(--line)}
+.stars button.on{color:var(--star)}
+.sugg{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.sugg button{display:flex;gap:10px;align-items:center;text-align:left;background:#fffaf0;color:var(--ink);border:1px solid var(--line);padding:6px}
+.sugg img,.ph{width:36px;height:54px;object-fit:cover;border-radius:4px;background:var(--line);flex:none}
+.sugg small{color:var(--mut)}
+.actions{display:flex;gap:8px;margin-top:14px}
+.bar{display:flex;justify-content:space-between;align-items:center;margin:4px 0 10px}
+.bar h2{font:700 18px Georgia,serif;margin:0}
+.bar .btns{display:flex;gap:6px}
+.bar button{padding:7px 10px;font-size:14px;border-color:#3d5b59;color:var(--paper)}
+.stub{display:flex;background:var(--paper);color:var(--ink);border-radius:12px;margin-bottom:10px;position:relative;overflow:hidden}
+.stub .l{padding:12px 12px 12px 14px;flex:1;min-width:0;display:flex;gap:10px}
+.stub .poster{width:44px;height:66px;border-radius:4px;object-fit:cover;flex:none;background:var(--line)}
+.stub .t{font:700 17px/1.2 Georgia,serif;overflow-wrap:anywhere}
+.stub .d{color:var(--mut);font-size:13px;margin-top:2px}
+.stub p{margin:6px 0 0;font-size:14px;white-space:pre-wrap}
+.stub .r{width:78px;border-left:2px dashed var(--bg);padding:10px 6px;text-align:center;display:flex;flex-direction:column;justify-content:center;gap:6px}
+.stub .n{font:700 30px/1 Georgia,serif;color:var(--red)}
+.stub .n small{font-size:14px;color:var(--mut)}
+.stub .r button{padding:4px;font-size:12px;border-color:var(--line);color:var(--ink)}
+.stub::before,.stub::after{content:"";position:absolute;right:68px;width:14px;height:14px;border-radius:50%;background:var(--bg)}
+.stub::before{top:-7px}.stub::after{bottom:-7px}
+.empty{text-align:center;color:#9fb5b2;padding:28px 0}
+.note{font-size:13px;color:#9fb5b2;margin:8px 0}
+.form .note{color:var(--mut)}
+dialog{border:0;border-radius:14px;padding:16px;background:var(--paper);color:var(--ink);width:min(92vw,420px)}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#000c;color:#fff;padding:10px 16px;border-radius:20px;font-size:14px;display:none;max-width:90vw}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>Мои фильмы</h1><button class="gear" id="gear" type="button">Настройки</button></header>
+
+  <section class="form">
+    <label for="q">Название фильма</label>
+    <div class="row"><input id="q" autocomplete="off" placeholder="Начните вводить название"><button class="sec" id="find" type="button">Найти</button></div>
+    <div class="sugg" id="sugg"></div>
+    <label for="d">Дата просмотра</label>
+    <input id="d" type="date">
+    <label>Оценка</label>
+    <div class="stars" id="stars"></div>
+    <label for="c">Комментарий</label>
+    <textarea id="c" placeholder="Что понравилось, что нет"></textarea>
+    <div class="actions"><button id="save" type="button">Сохранить</button><button class="sec" id="cancel" type="button" hidden>Отмена</button></div>
+  </section>
+
+  <div class="bar"><h2 id="cnt"></h2><div class="btns"><button class="sec" id="exp" type="button">Excel</button><button class="sec" id="imp" type="button">Импорт</button></div></div>
+  <div id="list"></div>
+  <input id="file" type="file" accept=".xlsx,.xls,.csv" hidden>
+</div>
+
+<dialog id="dlg">
+  <h3 style="margin:0 0 8px;font-family:Georgia,serif">Настройки</h3>
+  <label for="key">Ключ TMDB API (для поиска фильмов)</label>
+  <input id="key" placeholder="Вставьте ключ v3" autocapitalize="off" autocomplete="off">
+  <p class="note">Бесплатный ключ: themoviedb.org → Settings → API. Он хранится только на этом телефоне.</p>
+  <div class="actions"><button id="ksave" type="button">Сохранить</button><button class="sec" id="kclose" type="button">Закрыть</button></div>
+</dialog>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+<script>
+(function(){
+  var $=function(i){return document.getElementById(i)};
+  var KEY='movielog:films:v1', KK='movielog:tmdbkey';
+  var films=[],rating=0,editId=null,poster='';
+  try{films=JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){}
+  function persist(){try{localStorage.setItem(KEY,JSON.stringify(films))}catch(e){toast('Не удалось сохранить')}}
+  function toast(t){var el=$('toast');el.textContent=t;el.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(function(){el.style.display='none'},2600)}
+  function today(){var t=new Date();return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0')}
+  function fmt(d){var p=(d||'').split('-');return p.length===3?p[2]+'.'+p[1]+'.'+p[0]:(d||'')}
+  $('d').value=today();
+
+  var sb=$('stars');
+  for(var i=1;i<=5;i++)(function(n){var b=document.createElement('button');b.type='button';b.textContent='★';b.setAttribute('aria-label',n+' из 5');b.onclick=function(){rating=rating===n?0:n;paint()};sb.appendChild(b)})(i);
+  function paint(){[].forEach.call(sb.children,function(b,i){b.className=i<rating?'on':''})}
+
+  function render(){
+    films.sort(function(a,b){return (b.date||'').localeCompare(a.date||'')});
+    $('cnt').textContent='Просмотрено: '+films.length;
+    var box=$('list');box.innerHTML='';
+    if(!films.length){box.innerHTML='<div class="empty">Пока пусто. Добавьте первый фильм выше.</div>';return}
+    films.forEach(function(f){
+      var s=document.createElement('div');s.className='stub';
+      var l=document.createElement('div');l.className='l';
+      if(f.poster){var im=document.createElement('img');im.className='poster';im.loading='lazy';im.alt='';im.src='https://image.tmdb.org/t/p/w92'+f.poster;l.appendChild(im)}
+      var tx=document.createElement('div');tx.style.minWidth=0;
+      var t=document.createElement('div');t.className='t';t.textContent=f.title;
+      var d=document.createElement('div');d.className='d';d.textContent=fmt(f.date);
+      tx.appendChild(t);tx.appendChild(d);
+      if(f.comment){var p=document.createElement('p');p.textContent=f.comment;tx.appendChild(p)}
+      l.appendChild(tx);s.appendChild(l);
+      var r=document.createElement('div');r.className='r';
+      var n=document.createElement('div');n.className='n';n.innerHTML=(f.rating||'–')+'<small>/5</small>';
+      var e=document.createElement('button');e.className='sec';e.textContent='Изменить';e.onclick=function(){edit(f)};
+      var x=document.createElement('button');x.className='sec';x.textContent='Удалить';x.onclick=function(){if(confirm('Удалить «'+f.title+'»?')){films=films.filter(function(z){return z.id!==f.id});persist();render()}};
+      r.appendChild(n);r.appendChild(e);r.appendChild(x);s.appendChild(r);box.appendChild(s);
+    });
+  }
+  function edit(f){editId=f.id;$('q').value=f.title;$('d').value=f.date;rating=f.rating||0;poster=f.poster||'';paint();$('c').value=f.comment||'';$('cancel').hidden=false;$('save').textContent='Обновить';scrollTo({top:0,behavior:'smooth'})}
+  function reset(){editId=null;poster='';$('q').value='';$('d').value=today();rating=0;paint();$('c').value='';$('cancel').hidden=true;$('save').textContent='Сохранить';$('sugg').innerHTML=''}
+  $('cancel').onclick=reset;
+  $('save').onclick=function(){
+    var title=$('q').value.trim();if(!title){$('q').focus();return}
+    var id=editId||('f'+Date.now().toString(36)+Math.random().toString(36).slice(2,6));
+    var rec={id:id,title:title,date:$('d').value||today(),rating:rating,comment:$('c').value.trim(),poster:poster};
+    var i=films.findIndex(function(z){return z.id===id});
+    if(i>=0)films[i]=rec;else films.push(rec);
+    persist();render();reset();toast('Сохранено');
+  };
+
+  // TMDB search
+  $('find').onclick=async function(){
+    var q=$('q').value.trim();if(!q)return;
+    var key=localStorage.getItem(KK)||'';
+    var box=$('sugg');
+    if(!key){box.innerHTML='<div class="note">Для поиска добавьте ключ TMDB в настройках. Название можно ввести и вручную.</div>';return}
+    var b=$('find');b.disabled=true;b.textContent='…';
+    try{
+      var r=await fetch('https://api.themoviedb.org/3/search/movie?api_key='+encodeURIComponent(key)+'&language=ru-RU&query='+encodeURIComponent(q));
+      if(!r.ok)throw new Error(r.status);
+      var j=await r.json();box.innerHTML='';
+      (j.results||[]).slice(0,6).forEach(function(m){
+        var bt=document.createElement('button');bt.type='button';
+        var im=m.poster_path?document.createElement('img'):document.createElement('div');
+        if(m.poster_path){im.src='https://image.tmdb.org/t/p/w92'+m.poster_path;im.alt=''}else im.className='ph';
+        var tx=document.createElement('div');tx.textContent=m.title;
+        var sm=document.createElement('small');sm.textContent=' '+((m.release_date||'').slice(0,4));tx.appendChild(sm);
+        bt.appendChild(im);bt.appendChild(tx);
+        bt.onclick=function(){$('q').value=m.title+(m.release_date?' ('+m.release_date.slice(0,4)+')':'');poster=m.poster_path||'';box.innerHTML=''};
+        box.appendChild(bt);
+      });
+      if(!box.children.length)box.innerHTML='<div class="note">Ничего не найдено.</div>';
+    }catch(e){box.innerHTML='<div class="note">Не удалось выполнить поиск. Проверьте ключ и интернет.</div>'}
+    b.disabled=false;b.textContent='Найти';
+  };
+
+  // settings
+  $('gear').onclick=function(){$('key').value=localStorage.getItem(KK)||'';$('dlg').showModal()};
+  $('kclose').onclick=function(){$('dlg').close()};
+  $('ksave').onclick=function(){try{localStorage.setItem(KK,$('key').value.trim())}catch(e){}$('dlg').close();toast('Ключ сохранён')};
+
+  // Excel export / import
+  $('exp').onclick=async function(){
+    if(!films.length){toast('Список пуст');return}
+    if(!window.XLSX){toast('Библиотека Excel не загружена, нужен интернет');return}
+    var rows=films.map(function(f){return{'Название':f.title,'Дата просмотра':f.date,'Оценка (из 5)':f.rating||'','Комментарий':f.comment||''}});
+    var ws=XLSX.utils.json_to_sheet(rows);ws['!cols']=[{wch:36},{wch:16},{wch:14},{wch:60}];
+    var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Фильмы');
+    var buf=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+    var file=new File([buf],'films.xlsx',{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    try{
+      if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'Мои фильмы'});return}
+    }catch(e){if(e&&e.name==='AbortError')return}
+    var a=document.createElement('a');a.href=URL.createObjectURL(file);a.download='films.xlsx';document.body.appendChild(a);a.click();a.remove();
+  };
+  $('imp').onclick=function(){$('file').click()};
+  $('file').onchange=async function(){
+    var f=this.files[0];this.value='';if(!f)return;
+    if(!window.XLSX){toast('Библиотека Excel не загружена, нужен интернет');return}
+    try{
+      var wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:true});
+      var rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+      var added=0;
+      rows.forEach(function(r){
+        var title=String(r['Название']||'').trim();if(!title)return;
+        var d=r['Дата просмотра'];
+        if(d instanceof Date)d=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+        else{d=String(d||'');var m=d.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);if(m)d=m[3]+'-'+m[2]+'-'+m[1]}
+        var rt=parseInt(r['Оценка (из 5)'],10)||0;
+        var dup=films.some(function(x){return x.title===title&&x.date===d});
+        if(dup)return;
+        films.push({id:'f'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),title:title,date:d,rating:Math.max(0,Math.min(5,rt)),comment:String(r['Комментарий']||''),poster:''});added++;
+      });
+      persist();render();toast('Добавлено записей: '+added);
+    }catch(e){toast('Не удалось прочитать файл')}
+  };
+
+  render();paint();
+  if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(function(){});
+})();
+</script>
+</body>
+</html>

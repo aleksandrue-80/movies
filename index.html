@@ -84,7 +84,10 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <h3 style="margin:0 0 8px;font-family:Georgia,serif">Настройки</h3>
   <label for="key">Ключ TMDB API (для поиска фильмов)</label>
   <input id="key" placeholder="Вставьте ключ v3" autocapitalize="off" autocomplete="off">
-  <p class="note">Бесплатный ключ: themoviedb.org → Settings → API. Он хранится только на этом телефоне.</p>
+  <p class="note">Бесплатный ключ: themoviedb.org → Settings → API.</p>
+  <label for="kkey">Токен Кинопоиска (kinopoiskapiunofficial.tech)</label>
+  <input id="kkey" placeholder="Вставьте токен" autocapitalize="off" autocomplete="off">
+  <p class="note">Бесплатный токен выдаётся после регистрации на kinopoiskapiunofficial.tech. Ключи хранятся только на этом телефоне.</p>
   <div class="actions"><button id="ksave" type="button">Сохранить</button><button class="sec" id="kclose" type="button">Закрыть</button></div>
 </dialog>
 <div class="toast" id="toast"></div>
@@ -93,7 +96,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <script>
 (function(){
   var $=function(i){return document.getElementById(i)};
-  var KEY='movielog:films:v1', KK='movielog:tmdbkey';
+  var KEY='movielog:films:v1', KK='movielog:tmdbkey', KP='movielog:kpkey';
   var films=[],rating=0,editId=null,poster='';
   try{films=JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){}
   function persist(){try{localStorage.setItem(KEY,JSON.stringify(films))}catch(e){toast('Не удалось сохранить')}}
@@ -147,11 +150,15 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     var q=$('q').value.trim();if(!q)return;
     var key=localStorage.getItem(KK)||'',enc=encodeURIComponent(q);
     var box=$('sugg'),b=$('find');b.disabled=true;b.textContent='…';
+    var kp=localStorage.getItem(KP)||'';
     var tasks=[];
+    if(kp)tasks.push(fetch('https://kinopoiskapiunofficial.tech/api/v2.1/films/search-by-keyword?page=1&keyword='+enc,{headers:{'X-API-KEY':kp}}).then(function(r){if(!r.ok)throw new Error(r.status);return r.json()}).then(function(j){
+      var T={FILM:'Фильм',TV_SERIES:'Сериал',MINI_SERIES:'Сериал',TV_SHOW:'Шоу',VIDEO:'Видео'};
+      return (j.films||[]).slice(0,6).map(function(m){return{title:m.nameRu||m.nameEn||'',year:String(m.year||'').slice(0,4),poster:m.posterUrlPreview||'',kind:T[m.type]||'Фильм',src:'Кинопоиск'}}).filter(function(m){return m.title})}));
     if(key)tasks.push(getJson('https://api.themoviedb.org/3/search/movie?api_key='+encodeURIComponent(key)+'&language=ru-RU&query='+enc).then(function(j){
-      return (j.results||[]).slice(0,5).map(function(m){return{title:m.title,year:(m.release_date||'').slice(0,4),poster:m.poster_path?'https://image.tmdb.org/t/p/w92'+m.poster_path:'',kind:'Фильм'}})}));
+      return (j.results||[]).slice(0,5).map(function(m){return{title:m.title,year:(m.release_date||'').slice(0,4),poster:m.poster_path?'https://image.tmdb.org/t/p/w92'+m.poster_path:'',kind:'Фильм',src:'TMDB'}})}));
     tasks.push(getJson('https://api.tvmaze.com/search/shows?q='+enc).then(function(a){
-      return a.slice(0,5).map(function(x){var s=x.show;return{title:s.name,year:(s.premiered||'').slice(0,4),poster:s.image&&s.image.medium?s.image.medium.replace('http:','https:'):'',kind:'Сериал'}})}));
+      return a.slice(0,5).map(function(x){var s=x.show;return{title:s.name,year:(s.premiered||'').slice(0,4),poster:s.image&&s.image.medium?s.image.medium.replace('http:','https:'):'',kind:'Сериал',src:'TVMaze'}})}));
     var res=await Promise.allSettled(tasks),items=[],ok=false;
     res.forEach(function(r){if(r.status==='fulfilled'){ok=true;items=items.concat(r.value)}});
     box.innerHTML='';
@@ -159,23 +166,23 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       var bt=document.createElement('button');bt.type='button';
       var im;if(m.poster){im=document.createElement('img');im.src=m.poster;im.alt=''}else{im=document.createElement('div');im.className='ph'}
       var tx=document.createElement('div');tx.textContent=m.title;
-      var sm=document.createElement('small');sm.textContent=' '+(m.year?m.year+', ':'')+m.kind.toLowerCase();tx.appendChild(sm);
+      var sm=document.createElement('small');sm.textContent=' '+(m.year?m.year+', ':'')+m.kind.toLowerCase()+' ('+m.src+')';tx.appendChild(sm);
       bt.appendChild(im);bt.appendChild(tx);
       bt.onclick=function(){$('q').value=m.title+(m.year?' ('+m.year+')':'');poster=m.poster;box.innerHTML=''};
       box.appendChild(bt);
     });
     var msg='';
-    if(!ok)msg='Не удалось выполнить поиск. Проверьте интернет и ключ TMDB.';
+    if(!ok)msg='Не удалось выполнить поиск. Проверьте интернет и ключи в настройках.';
     else if(!items.length)msg='Ничего не найдено.';
-    else if(!key)msg='Показаны только сериалы. Чтобы искать и фильмы, добавьте ключ TMDB в настройках.';
+    else if(!key&&!kp)msg='Показаны только сериалы. Для поиска фильмов добавьте токен Кинопоиска или ключ TMDB в настройках.';
     if(msg){var n=document.createElement('div');n.className='note';n.textContent=msg;box.appendChild(n)}
     b.disabled=false;b.textContent='Найти';
   };
 
   // settings
-  $('gear').onclick=function(){$('key').value=localStorage.getItem(KK)||'';$('dlg').showModal()};
+  $('gear').onclick=function(){$('key').value=localStorage.getItem(KK)||'';$('kkey').value=localStorage.getItem(KP)||'';$('dlg').showModal()};
   $('kclose').onclick=function(){$('dlg').close()};
-  $('ksave').onclick=function(){try{localStorage.setItem(KK,$('key').value.trim())}catch(e){}$('dlg').close();toast('Ключ сохранён')};
+  $('ksave').onclick=function(){try{localStorage.setItem(KK,$('key').value.trim());localStorage.setItem(KP,$('kkey').value.trim())}catch(e){}$('dlg').close();toast('Ключи сохранены')};
 
   // Excel export / import
   $('exp').onclick=async function(){
